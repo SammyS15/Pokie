@@ -35,7 +35,7 @@ def get_radius(truth, centers):
     Returns:
     list: Radii of the clusters, a 1D list of length `num_ground_truth`.
     """
-    epsilon = 1e-4
+    epsilon = 1e-1
     radius = []
     for i in range(len(truth)):
         curr_center = centers[i][0]
