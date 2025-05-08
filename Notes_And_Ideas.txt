@@ -40,6 +40,7 @@ To-Do List:
 Sammy
 - Clean up the Pokie Source Code -- Modifications have been made since the last time it was pushed
 - Clean up the New Experiments
+- Generate Lens from Andi's NPE/NRE Paper Setup and Run Pokie
 - Implement Empirical Convergence Value Calculation & Analysis
 
 Justine
