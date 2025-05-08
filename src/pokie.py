@@ -2,6 +2,14 @@
 import numpy as np
 from tqdm import tqdm
 
+import numpy as np
+from tqdm import tqdm
+
+'''
+Right now n_over_N_values is for P(\lambda) as it is for ALL Hyperspheres 
+What we want to show to P(\lmabda | R) which is n_over_N_values for a SINGULAR Hupersphere
+    - When doing this, return a few reuslts as it is lot to compute and store
+'''
 
 def pokie(truth, posterior, num_runs=100):
     """
@@ -125,9 +133,6 @@ def pokie(truth, posterior, num_runs=100):
 
     return average_total_probabilities, average_calibration_probabilities, np.array(n_over_N_values)
 
-'''
-Figure out how to handle multiple posterior models and still do bootstrapping (look at Pokie and it handles it)
-'''
 def pokie_bootstrap(truth, posterior, num_bootstrap: int = 100,):
     '''
     This will bootstrap & send it to Pokie which will return the results and store it to then return after all runs are done.

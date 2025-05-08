@@ -1,0 +1,49 @@
+########################################################
+This Serves as General Notes From Pokie Meetings
+########################################################
+As a reminder, the goal of the Pokie Project is to submit to the ml4astro colocated workshop 
+- Deadline June 9th
+- 2 to 4 Pages 
+
+########################################################
+Review of May 2nd AND 7th Meeting
+########################################################
+For the convergence proof, Justine identified that to get the 2/3 upper limit 
+indicating that the model is well calibrated and 1/2 lower limit indicating that the model 
+is not calibrated and is dependent on the assumption of P(\lambda). 
+
+Currently, we have that P(\lambda) is from a uniform distribution however if it is NOT a uniform 
+distribution the upper and lower limit values are different. Thus to move forward with the 
+convergence proof we need to prove that P(\lambda) is from a uniform distribution.
+
+Mathematically proving this is difficult and neither of us has been able to show that 
+P(\lambda) is from a uniform distribution. However, Sammy is an informal proof that provides a 
+Semi-Empircal Setup shows that P(\lambda) is from a uniform distribution based on how we define 
+the center of the hypersphere as well as the radius of the hypersphere.
+- The TLDR is that the center is sampled from a Uniform distribution and the radius is defined 
+    from the  center & a random posterior sample, and repeating this process many times, we can 
+    claim that the  probability mass of the samples falling inside the hypersphere is from a uniform 
+    distribution.
+
+Justine has an idea based on the setup for the convergence proof. We can calculate the empirical 
+convergence values based on the current posterior samples and then take the Pokie values, take the 
+difference, and repeat for multiple  models. Thus a value closer to 0 indicates a well-calibrated 
+model and a value further away from 0 indicates a poorly calibrated model.
+- Justine is going to write out the empirical convergence value calculation and Sammy is going to 
+    implement this in the code.
+
+We then need to decide if both OR one of these ideas is the correct way forward. This is not only 
+important for the convergence proof but also for claiming we can do model comparison as we need a way 
+of claiming that a model with a lower pokie value is a worse model.
+
+To-Do List:
+Sammy
+- Clean up the Pokie Source Code -- Modifications have been made since the last time it was pushed
+- Clean up the New Experiments
+- Implement Empirical Convergence Value Calculation & Analysis
+
+Justine
+- Write out Empirical Convergence Value Calculation
+
+Both 
+- Clean up the paper and make it cleaner
