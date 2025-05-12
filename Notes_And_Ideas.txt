@@ -36,11 +36,16 @@ We then need to decide if both OR one of these ideas is the correct way forward.
 important for the convergence proof but also for claiming we can do model comparison as we need a way 
 of claiming that a model with a lower pokie value is a worse model.
 
+
 To-Do List:
 Sammy
-- Clean up the Pokie Source Code -- Modifications have been made since the last time it was pushed
+- Clean up the Pokie Source Code 
+    - This is done. It has been cleaned, commented, vectorized, and made GPU compatible.
 - Clean up the New Experiments
-- Generate Lens from Andi's NPE/NRE Paper Setup and Run Pokie
+    - This done. Linear Regression, Logistic Regression, and Mean Infernce have very good documentation.
+    - The rest of the experiment have less but equally good documentation.
+- Generate Lens from Andi's NPE/NRE Paper Setup and Run Pokie.
+    - This has been started but does NOT work. Working with Andi to figure this out
 - Implement Empirical Convergence Value Calculation & Analysis
 
 Justine
