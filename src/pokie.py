@@ -108,6 +108,63 @@ def pokie(truth: torch.Tensor,
     return avg_prob, avg_calibration, n_over_N_vals
 
 
+def pokie_with_convergence_estimate(truth: torch.Tensor,
+                                    posterior: torch.Tensor,
+                                    num_runs: int = 100,
+                                    device: torch.device = None
+                                    ) -> dict:
+    """
+    Computes both the empirical Pokie value and the expected theoretical Pokie convergence value
+    based on E[lambda] and E[lambda^2] estimated from Monte Carlo.
+
+    Parameters
+    ----------
+    truth : Tensor (T, q)
+    posterior : Tensor (M, T, S, q)
+    num_runs : int
+    device : torch.device
+
+    Returns
+    -------
+    result : dict with keys:
+        - "empirical_pokie" : (M,)      The Monte Carlo estimate
+        - "theoretical_pokie" : (M,)    Estimated P_pokie(M) via E[lambda]
+        - "convergence_gap" : (M,)      Difference between theory and empirical
+        - "E_lambda" : (M,)             Empirical E[lambda] per model
+        - "E_lambda_sq" : (M,)          Empirical E[lambda^2] per model
+        - "n_over_N_vals" : (num_runs, M, T)
+    """
+    # Run standard Pokie
+    avg_pokie, avg_calibration, n_over_N = pokie(truth, posterior, num_runs=num_runs, device=device)
+
+    # Compute expectations
+    # n_over_N: (num_runs, M, T) --> flatten over (num_runs * T) per model
+    M = n_over_N.shape[1]
+    N = posterior.shape[2] - 1  # number of posterior samples minus 1
+
+    # n_flat = n_over_N.reshape(num_runs * n_over_N.shape[2], M)  # shape: (num_runs*T, M)
+    n_flat = n_over_N.permute(1, 0, 2).reshape(M, -1).T         # shape: (num_runs*T, M)
+    E_lambda = n_flat.mean(dim=0)                               # shape: (M,)
+    E_lambda_sq = (n_flat ** 2).mean(dim=0)                     # shape: (M,)
+
+    # Theoretical P_pokie(M)
+    numer = 2 * N * E_lambda_sq - 2 * N * E_lambda + N + 1
+    denom = N + 2
+    theo_pokie = numer / denom
+
+    # Compare to empirical
+    gap = theo_pokie - avg_calibration
+
+    return {
+        "empirical_pokie": avg_pokie,
+        "theoretical_pokie": theo_pokie,
+        "convergence_gap": gap,
+        "E_lambda": E_lambda,
+        "E_lambda_sq": E_lambda_sq,
+        "n_over_N_vals": n_over_N,
+    }
+
+
 def pokie_bootstrap(truth: torch.Tensor,
                     posterior: torch.Tensor,
                     num_bootstrap: int = 100,
