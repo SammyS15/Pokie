@@ -12,10 +12,10 @@ Pokie is a Python package for evaluating the calibration and accuracy of posteri
 - Sample a random center $c_{j,\ell} \in \mathbb{R}^q$
 - Select a random posterior sample to define a radius:
 $r_{j,\ell} = \| c_{j,\ell} - y_{i,j} \|$
-- Define a region $\mathcal{R}_{j,\ell}$ as the hypersphere around $c_{j,\ell}$ with radius $r_{j,\ell}$
+- Define a region $\mathcal{R}{j,\ell}$ as the hypersphere around $c_{j,\ell}$ with radius $r_{j,\ell}$
 4.	Count Points
-- Count how many posterior samples fall into the region: $n = \sum_i \mathbf{1}[ y_{i,j} \in \mathcal{R}_{j,\ell} ]$
-- Check if the ground-truth sample falls inside: $k = \boldsymbol{1}[ y^*_j \in \mathcal{R}_{j,\ell} ]$
+- Count how many posterior samples fall into the region: $n = \sum_i \mathbf{1}[y_{i,j} \in \mathcal{R}_{j,\ell}]$
+- Check if the ground-truth sample falls inside: $k = \mathbf{1}[y^*j \in \mathcal{R}_{j,\ell}]$
 5.	Update Score
 ```
 if k == 1:
