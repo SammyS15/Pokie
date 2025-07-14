@@ -1,163 +1,135 @@
-# Imports
-import numpy as np
+import torch
 from tqdm import tqdm
+import torch.nn.functional as F
+import scipy.spatial.distance as ssd
+import numpy as np
+from scipy.spatial.distance import cdist
 
-
-def pokie(truth, posterior, num_runs=100):
+def get_device():
     """
-    truth: array of shape (num_truth, q)
-    posterior: array of shape (num_models, num_truth, num_posterior_samples, q)
-    num_runs: number of Monte Carlo runs
+    Choose the most capable computation device available: CUDA, MPS (Mac GPU), or CPU.
+    """
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return torch.device('mps')
+    return torch.device('cpu')
+
+
+def pokie(truth: torch.Tensor,
+          posterior: torch.Tensor,
+          num_runs: int = 100,
+          device: torch.device = None
+          ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    """
+    Monte Carlo estimation of predictive probabilities, calibration, and per-model normalized counts.
+
+    Returns per-run, per-model n/N values instead of a flattened array.
+
+    Parameters
+    ----------
+    truth : Tensor of shape (T, q)
+        Ground-truth parameter vectors (T samples in q dims).
+    posterior : Tensor of shape (M, T, S, q)
+        Posterior draws from M models, T truths, S samples each in q dims.
+    num_runs : int
+        Number of Monte Carlo replications.
+    device : torch.device, optional
+        Computation device; auto-detected if None.
 
     Returns
     -------
-    average_total_probabilities: array of shape (num_models,)
-        The average probabilities across runs for each model
+    score : Tensor of shape (M,)
+        Pokie Score per model across runs.
     """
-    # Validate shapes
-    num_truth, dim = truth.shape
-    num_models, truth_check, num_posterior_samples, dim_check = posterior.shape
+    # Device setup
+    device = device or get_device()
+    truth = truth.to(device)
+    posterior = posterior.to(device)
 
-    if num_truth != truth_check:
-        raise ValueError("Number of truth samples doesn't match the second dimension of posterior.")
-    if dim != dim_check:
-        raise ValueError("Parameter dimension of truth doesn't match that of posterior.")
+    # Shapes
+    M, T, S, q = posterior.shape
+    if truth.shape != (T, q):
+        raise ValueError(f"Expected truth shape {(T, q)}, got {tuple(truth.shape)}")
 
-    total_probability = []
-    total_calibration_probability = []
-    n_over_N_values = []  # Store all n/N values
+    # Constants
+    N = S - 1
+    max_val = (N + 1) / (N + 2)
 
-    for _ in tqdm(range(num_runs)):
-        # Generate random centers: (num_truth, dim)
-        centers = np.random.uniform(low=0, high=1, size=(num_truth, dim))
+    # Pre-allocate
+    total_score = torch.zeros((num_runs, M), device=device)
 
-        # Probability array to fill: (num_models, num_truth)
-        probability = np.zeros((num_models, num_truth))
+    # Monte Carlo runs
+    for run in tqdm(range(num_runs), desc="Pokie MC runs"):
+        # 1. Random centers (T, q)
+        centers = torch.rand((T, q), device=device)
 
-        calibration_probability = np.zeros((num_models, num_truth))
+        # 2. Distances (M, T, S)
+        dists = torch.norm(centers[None, :, None, :] - posterior, dim=3)
 
-        # Loop over each truth sample i
-        for i in range(num_truth):
-            curr_truth = truth[i]
-            curr_center = centers[i]
+        # 3. Random radius per (model, truth)
+        rand_idx = torch.randint(0, S, (M, T), device=device)
+        m_idx = torch.arange(M, device=device)[:, None]
+        t_idx = torch.arange(T, device=device)[None, :]
+        radii = dists[m_idx, t_idx, rand_idx] + 1e-12
 
-            # Precompute squared distance between center & truth for k-check
-            theta_gt_dist_sq = np.sqrt(np.sum((curr_center - curr_truth) ** 2))
+        # 4. Truth distances broadcast (M, T)
+        true_dists = torch.norm(centers - truth, dim=1)       # (T,)
+        k = (true_dists[None, :] <= radii).float()            # (M, T)
 
-            # Loop over each model j
-            for j in range(num_models):
-                curr_posterior = posterior[j, i]  # shape: (num_posterior_samples, dim)
+        # 5. Counts per radius (M, T)
+        counts = (dists < radii.unsqueeze(2)).sum(dim=2)
 
-                # Pick one random sample index
-                idx = np.random.randint(low=0, high=len(curr_posterior))
-                random_sample = curr_posterior[idx]
+        # 6. Predictive probability (M, T)
+        prob_in = (counts + 1) / (N + 2)
+        prob_out = (N - counts + 1) / (N + 2)
+        prob = prob_in * k + prob_out * (1 - k)
 
-                # Create a mask to exclude the chosen sample
-                mask = np.ones(len(curr_posterior), dtype=bool)
-                mask[idx] = False
+        # 7. Calibration (M, T)
+        calib = prob / max_val
 
-                # Compute squared distance between center & random sample
-                theta_dist_sq = np.sqrt(np.sum((curr_center - random_sample) ** 2)) + 1e-4
+        # 8. Aggregate
+        total_score[run] = calib.mean(dim=1)
 
-                # Compute squared distance to *all* remaining posterior points
-                dist_sq_to_posterior = np.sqrt(np.sum((curr_center - curr_posterior[mask]) ** 2, axis=1)) # shape: (num_posterior_samples - 1,)
+    # Average results across runs
+    score = total_score.mean(dim=0)
 
-                # Determine k by comparing the truth distance vs. random sample distance
-                if theta_gt_dist_sq <= theta_dist_sq:
-                    curr_k = 1
-                else:
-                    curr_k = 0
-
-                # Count how many posterior samples lie within the radius set by random_sample
-                n = np.sum(dist_sq_to_posterior < theta_dist_sq)
-                N = len(curr_posterior) - 1
-
-                n_over_N_values.append(n / N)  # Collect normalized count
-
-                if n > N:
-                    raise ValueError("n > N: unexpected counting error.")
-
-                # Compute probability
-                if curr_k == 1:
-                    curr_prob = (n + 1) / (N + 2)
-                else:
-                    curr_prob = (N - n + 1) / (N + 2)
-
-                # Min Possible Value: 1 / (N + 2) # Max Possible Value: (N + 1) / (N + 2)
-                min_possible_value = 1 / (N + 2)
-                max_possible_value = (N + 1) / (N + 2)
-
-                # Make sure curr_prob is within the range [min_possible_value, max_possible_value]
-                if not (min_possible_value <= curr_prob <= max_possible_value):
-                    raise ValueError("curr_prob is out of bounds.")
-
-                probability[j, i] = curr_prob 
-
-                calibration_probability[j, i] = curr_prob / max_possible_value
-
-        model_expectations = np.empty((len(posterior), 1))
-        # probability is a (num_models, num_truth) --> Average across ground truths (axis=1)
-        model_expectations = np.mean(probability, axis=1) # shape: (num_models,)
-        # Store in total_probability
-        total_probability.append(model_expectations)
-
-        model_calibraton_expectations = np.empty((len(posterior), 1))
-        # probability is a (num_models, num_truth) --> Average across ground truths (axis=1)
-        model_calibraton_expectations = np.mean(calibration_probability, axis=1)
-        # Store in total_calibration_probability
-        total_calibration_probability.append(model_calibraton_expectations)
+    return score
 
 
-    # Convert to numpy array
-    total_probability = np.array(total_probability) # shape: (num_runs, num_models)
-    # Average across runs (axis=0)
-    average_total_probabilities = np.mean(total_probability, axis=0) # shape: (num_models,)
+def pokie_bootstrap(truth: torch.Tensor,
+                    posterior: torch.Tensor,
+                    num_bootstrap: int = 100,
+                    num_runs: int = 100,
+                    device: torch.device = None
+                    ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    """
+    Bootstrap wrapper producing per-bootstrap, per-run, per-model n/N arrays.
 
-    # Convert to numpy array
-    total_calibration_probability = np.array(total_calibration_probability) # shape: (num_runs, num_models)
-    # Average across runs (axis=0)
-    average_calibration_probabilities = np.mean(total_calibration_probability, axis=0) # shape: (num_models,)
+    Returns
+    -------
+    boot_score : Tensor of shape (num_bootstrap, M)
+    """
+    device = device or get_device()
+    truth = truth.to(device)
+    posterior = posterior.to(device)
 
-    # Check to see if more than one row in total_probability
-    if total_probability.shape[1] > 1:
-        # print(f'Shape of total_probability: {total_probability.shape}')
-        average_total_probabilities = average_total_probabilities / np.sum(average_total_probabilities)
+    M, T, S, q = posterior.shape
+    boot_score = torch.zeros((num_bootstrap, M), device=device)
 
-    return average_total_probabilities, average_calibration_probabilities, np.array(n_over_N_values)
+    for b in tqdm(range(num_bootstrap), desc="Bootstrapping pokie"):
+        # Resample
+        idx = torch.randint(0, T, (T,), device=device)
+        truth_bs = truth[idx]
+        posterior_bs = posterior[:, idx, :, :]
 
-'''
-Figure out how to handle multiple posterior models and still do bootstrapping (look at Pokie and it handles it)
-'''
-def pokie_bootstrap(truth, posterior, num_bootstrap: int = 100,):
-    '''
-    This will bootstrap & send it to Pokie which will return the results and store it to then return after all runs are done.
-    '''
+        # Run pokie
+        avg_q, = pokie(
+            truth_bs,
+            posterior_bs,
+            num_runs=num_runs,
+            device=device
+        )
+        boot_score[b] = avg_q
 
-    store_average_probabilities = []
-    store_calibration_probabilities = []
-    store_n_over_N_values = []
-
-    for i in range(num_bootstrap):
-        # Bootstrap the truth
-        idx = np.random.randint(low=0, high=len(truth), size=len(truth))
-        
-        # Sample with replacement from the full set of simulations
-        boot_samples = posterior[:, idx, :, :]
-        boot_theta = truth[idx]
-
-        # Send to Pokie
-        average_total_probabilities, average_calibration_probabilities, n_over_N = pokie(boot_theta, boot_samples)
-
-        # Store the results
-        store_average_probabilities.append(average_total_probabilities)
-        store_calibration_probabilities.append(average_calibration_probabilities)
-        store_n_over_N_values.append(n_over_N)
-
-    # Convert to numpy array
-    store_average_probabilities = np.array(store_average_probabilities) # shape: (num_runs, num_models)
-   
-    # Convert to numpy array
-    store_calibration_probabilities = np.array(store_calibration_probabilities) # shape: (num_runs, num_models)
-    store_n_over_N_values = np.concatenate(store_n_over_N_values)
-
-    return store_average_probabilities, store_calibration_probabilities, store_n_over_N_values
+    return boot_score
