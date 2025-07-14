@@ -39,12 +39,8 @@ def pokie(truth: torch.Tensor,
 
     Returns
     -------
-    avg_prob : Tensor of shape (M,)
-        Mean predictive probability per model across runs.
-    quality : Tensor of shape (M,)
-        Mean calibration per model across runs.
-    n_over_N_vals : Tensor of shape (num_runs, M, T)
-        Normalized counts n/N for each run, model, and truth.
+    score : Tensor of shape (M,)
+        Pokie Score per model across runs.
     """
     # Device setup
     device = device or get_device()
@@ -61,9 +57,7 @@ def pokie(truth: torch.Tensor,
     max_val = (N + 1) / (N + 2)
 
     # Pre-allocate
-    total_prob = torch.zeros((num_runs, M), device=device)
-    total_quality = torch.zeros((num_runs, M), device=device)
-    n_over_N_vals = torch.zeros((num_runs, M, T), device=device)
+    total_score = torch.zeros((num_runs, M), device=device)
 
     # Monte Carlo runs
     for run in tqdm(range(num_runs), desc="Pokie MC runs"):
@@ -95,18 +89,47 @@ def pokie(truth: torch.Tensor,
         calib = prob / max_val
 
         # 8. Aggregate
-        total_prob[run] = prob.mean(dim=1)
-        total_quality[run] = calib.mean(dim=1)
-
-        # 9. Store n/N per model & truth
-        n_over_N_vals[run] = counts.float() / N
+        total_score[run] = calib.mean(dim=1)
 
     # Average results across runs
-    quality = total_quality.mean(dim=0)
+    score = total_score.mean(dim=0)
 
-    # Normalize quality to [0, 1] range
-    quality_norm = (quality - 0.5) / (2/3 - 0.5)
-    quality_norm = torch.clamp(quality_norm, min=0.0, max=1.0)
-    probabilty = quality_norm / quality_norm.sum() # Normalize probabilities to sum to 1
+    return score
 
-    return probabilty, quality, n_over_N_vals
+
+def pokie_bootstrap(truth: torch.Tensor,
+                    posterior: torch.Tensor,
+                    num_bootstrap: int = 100,
+                    num_runs: int = 100,
+                    device: torch.device = None
+                    ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    """
+    Bootstrap wrapper producing per-bootstrap, per-run, per-model n/N arrays.
+
+    Returns
+    -------
+    boot_score : Tensor of shape (num_bootstrap, M)
+    """
+    device = device or get_device()
+    truth = truth.to(device)
+    posterior = posterior.to(device)
+
+    M, T, S, q = posterior.shape
+    boot_score = torch.zeros((num_bootstrap, M), device=device)
+
+    for b in tqdm(range(num_bootstrap), desc="Bootstrapping pokie"):
+        # Resample
+        idx = torch.randint(0, T, (T,), device=device)
+        truth_bs = truth[idx]
+        posterior_bs = posterior[:, idx, :, :]
+
+        # Run pokie
+        avg_q, = pokie(
+            truth_bs,
+            posterior_bs,
+            num_runs=num_runs,
+            device=device
+        )
+        boot_score[b] = avg_q
+
+    return boot_score
