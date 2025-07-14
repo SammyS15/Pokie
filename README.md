@@ -5,19 +5,17 @@ Pokie is a Python package for evaluating the calibration and accuracy of posteri
 ## How Pokie Works
 
 1.	Select a Ground Truth
-- Pick a truth sample $y^*_j \sim p(y | x^*, \mathcal{M}^*)$
+- Pick a truth sample $y^\*_{j} \sim p(y | x^\*, \mathcal{M}^\*)$
 2.	Draw Posterior Samples
 - Draw N samples $\{ y_{i,j} \}_{i=1}^N \sim p(y | x^*, \mathcal{M})$
 3.	Repeat for Lr Random Regions:
 - Sample a random center $c_{j,\ell} \in \mathbb{R}^q$
 - Select a random posterior sample to define a radius:
 $r_{j,\ell} = \| c_{j,\ell} - y_{i,j} \|$
-- Define a region $\mathcal{R}_{j,\ell}$ as the hypersphere around $c{j,\ell}$ with radius $r_{j,\ell}$
+- Define a region $\mathcal{R}{j,\ell}$ as the hypersphere around $c_{j,\ell}$ with radius $r_{j,\ell}$
 4.	Count Points
-- Count how many posterior samples fall into the region:
-$n = \sum_i \mathbf{1}[ y_{i,j} \in \mathcal{R}_{j,\ell} ]$
-- Check if the ground-truth sample falls inside:
-$k = \mathbf{1}[ y^*_j \in \mathcal{R}_{j,\ell} ]$
+- Count how many posterior samples fall into the region: $n = \sum_i \mathbf{1}[y_{i,j} \in \mathcal{R}_{j,\ell}]$
+- Check if the ground-truth sample falls inside: $k = \mathbf{1}[y^*j \in \mathcal{R}_{j,\ell}]$
 5.	Update Score
 ```
 if k == 1:
