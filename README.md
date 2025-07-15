@@ -1,6 +1,14 @@
-# Pokie: Posterior over k Inference Estimation
+# Pokie: Posterior Accuracy and Model Comparison
 
 Pokie is a Python package for evaluating the calibration and accuracy of posterior distributions through a sample-based, likelihood-free method. It enables Bayesian model comparison in simulation-based settings where the true posterior is unknown and standard metrics fail.
+
+## Install
+
+To install Pokie, run the following:
+
+```bash
+pip install pokie-score
+```
 
 ## How Pokie Works
 

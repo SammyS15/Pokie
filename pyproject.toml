@@ -3,14 +3,14 @@ requires = ["hatchling", "hatch-requirements-txt", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pokie"
+name = "pokie_score"
 dynamic = [
         "dependencies",
         "version"
 ]
 authors = [
-  { name="Sammy Sharief", email="sharief2@illinois.edu" },
-  { name = "Justine Zeghal", email = "" }
+  { name="Sammy Sharief", email="sammybassoon1516@hotmail.com" },
+  { name = "Justine Zeghal", email = "zghjustinephd@gmail.com" }
 ]
 description = "Implemenation of the Pokie from Sharief et al. 2025"
 readme = "README.md"
